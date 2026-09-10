@@ -1,4 +1,4 @@
-import neo4j, { type Driver, type ManagedTransaction } from "neo4j-driver";
+import neo4j, { Neo4jError, type Driver, type ManagedTransaction } from "neo4j-driver";
 import { getConfig } from "./config";
 
 /**
@@ -54,6 +54,19 @@ export async function executeWrite<T>(work: (tx: ManagedTransaction) => Promise<
 }
 
 async function run<T>(mode: "READ" | "WRITE", work: (tx: ManagedTransaction) => Promise<T>): Promise<T> {
+  try {
+    return await attempt(mode, work);
+  } catch (error) {
+    if (!isRetryable(error)) throw error;
+    // Free-tier instances pause when idle: the first query wakes them and
+    // times out, so one delayed retry covers the wake-up window instead of
+    // surfacing a scary error page for a healthy-but-sleepy database.
+    await sleep(RETRY_DELAY_MS);
+    return attempt(mode, work);
+  }
+}
+
+async function attempt<T>(mode: "READ" | "WRITE", work: (tx: ManagedTransaction) => Promise<T>): Promise<T> {
   const d = await getDriver();
   const session = d.session({ defaultAccessMode: mode });
   try {
@@ -61,6 +74,18 @@ async function run<T>(mode: "READ" | "WRITE", work: (tx: ManagedTransaction) => 
   } finally {
     await session.close();
   }
+}
+
+const RETRY_DELAY_MS = 3000;
+
+const RETRYABLE_CODES = ["ServiceUnavailable", "SessionExpired", "TransientError", "DatabaseUnavailable"];
+
+function isRetryable(error: unknown): boolean {
+  return error instanceof Neo4jError && RETRYABLE_CODES.some((code) => (error.code ?? "").includes(code));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Probe the database with a lightweight round-trip. Rejects when unreachable. */
