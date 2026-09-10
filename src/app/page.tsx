@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
 import { RiskBadge, riskLevel } from "@/components/risk-badge";
 import { RegionExposureChart } from "@/components/region-exposure-chart";
+import { SpofExportButton } from "@/components/spof-export-button";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -118,7 +119,10 @@ export default async function DashboardPage() {
           <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
             Single points of failure
           </h2>
-          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">ranked by revenue exposed</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">ranked by revenue exposed</span>
+            <SpofExportButton rows={spof} />
+          </div>
         </div>
         <div className="overflow-hidden rounded-xl border border-border/60 bg-card/70">
           <Table>

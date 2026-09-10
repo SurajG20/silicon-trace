@@ -11,6 +11,15 @@ how much revenue is at risk, and where to dual-source before it happens.
 | --- | --- | --- |
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Impact](docs/screenshots/impact.png) | ![BOM](docs/screenshots/bom.png) |
 
+## Highlights
+
+- **One-click worst-case** — the impact simulator suggests the highest-risk
+  facility, so first-time visitors get the most dramatic blast radius instantly.
+- **Shareable simulations** — every result links to a deep URL
+  (`/impact?facility=…`) with a copy-to-clipboard button; links auto-run on open.
+- **CSV exports** — blast-radius results and the single-points-of-failure
+  report download as CSV for follow-up analysis.
+
 ## Why a graph database?
 
 A bill of materials is a **recursive hierarchy**: products contain modules that

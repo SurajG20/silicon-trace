@@ -7,7 +7,10 @@ import { toast } from "sonner";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
+  CopyIcon,
+  DownloadIcon,
   FactoryIcon,
+  FlameIcon,
   LoaderCircleIcon,
   PackageSearchIcon,
   RotateCcwIcon,
@@ -25,6 +28,7 @@ import { EmptyState } from "@/components/empty-state";
 import { RiskBadge, riskLevel } from "@/components/risk-badge";
 import { cn } from "@/lib/utils";
 import { fmtCompactInt, fmtCompactUsd } from "@/lib/format";
+import { copyText, downloadCsv, toCsv } from "@/lib/csv";
 import type { FacilityOption, ImpactSummary } from "@/lib/services/types";
 
 type Phase =
@@ -52,6 +56,16 @@ export function ImpactSimulator({ facilities }: { facilities: FacilityOption[] }
   const autoRanFor = useRef<string | null>(null);
 
   const selected = useMemo(() => facilities.find((f) => f.id === selectedId) ?? null, [facilities, selectedId]);
+
+  // Highest region risk first, most parts sourced as tie-break — the most
+  // dramatic demo for first-time visitors with zero domain knowledge.
+  const worstCase = useMemo(
+    () =>
+      [...facilities].sort(
+        (a, b) => b.regionRiskIndex - a.regionRiskIndex || b.partsSourced - a.partsSourced,
+      )[0] ?? null,
+    [facilities],
+  );
 
   const run = useCallback(
     async (facilityId: string) => {
@@ -86,6 +100,15 @@ export function ImpactSimulator({ facilities }: { facilities: FacilityOption[] }
     setPickerOpen(false);
     setPhase({ kind: "idle" });
     router.replace(`/impact?facility=${encodeURIComponent(id)}`, { scroll: false });
+  }
+
+  function runWorstCase() {
+    if (!worstCase) return;
+    setPickerOpen(false);
+    // Replace the URL (so the result stays shareable) and run directly —
+    // the ?facility= auto-run guard fires only once per facility.
+    router.replace(`/impact?facility=${encodeURIComponent(worstCase.id)}`, { scroll: false });
+    void run(worstCase.id);
   }
 
   return (
@@ -181,6 +204,18 @@ export function ImpactSimulator({ facilities }: { facilities: FacilityOption[] }
               {phase.kind === "loading" ? "Traversing graph…" : "Simulate outage"}
             </Button>
 
+            {worstCase && phase.kind !== "loading" ? (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={runWorstCase}
+                title={`${worstCase.name} · ${worstCase.city} (risk ${worstCase.regionRiskIndex})`}
+              >
+                <FlameIcon className="size-4" />
+                Try worst-case facility
+              </Button>
+            ) : null}
+
             {phase.kind === "done" ? (
               <Button variant="ghost" size="sm" className="w-full gap-1.5 text-muted-foreground" onClick={() => setPhase({ kind: "idle" })}>
                 <RotateCcwIcon className="size-3.5" /> Reset results
@@ -231,6 +266,22 @@ function Results({ summary }: { summary: ImpactSummary }) {
   const worstExposure = impactedProducts.reduce((m, p) => Math.max(m, p.exposureScore), 0);
   const totalUnits = impactedProducts.reduce((a, p) => a + p.annualUnits, 0);
 
+  async function share() {
+    const url = `${window.location.origin}/impact?facility=${encodeURIComponent(facility.id)}`;
+    const ok = await copyText(url);
+    if (ok) toast.success("Share link copied", { description: `${facility.name} blast radius` });
+    else toast.error("Copy failed", { description: url });
+  }
+
+  function exportCsv() {
+    const csv = toCsv(
+      ["sku", "product", "brand", "category", "annual_revenue_usd", "annual_units", "exposure_score", "sole_source_chokepoints"],
+      impactedProducts.map((p) => [p.sku, p.name, p.brand, p.category, p.annualRevenueUsd, p.annualUnits, p.exposureScore, p.singleSourceChokepoints]),
+    );
+    downloadCsv(`silicontrace-impact-${facility.id}.csv`, csv);
+    toast.success("Results exported", { description: `${impactedProducts.length} products` });
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -248,9 +299,20 @@ function Results({ summary }: { summary: ImpactSummary }) {
               <span className="font-medium text-primary">{facility.name}</span>
               <span className="text-muted-foreground"> ({fmtCompactInt(totalUnits)} units/yr)</span>
             </p>
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-              sorted by annual revenue at risk
-            </span>
+            <div className="flex items-center gap-1.5">
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" onClick={() => void share()}>
+                <CopyIcon className="size-3.5" /> Share
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-muted-foreground"
+                onClick={exportCsv}
+                disabled={impactedProducts.length === 0}
+              >
+                <DownloadIcon className="size-3.5" /> CSV
+              </Button>
+            </div>
           </div>
 
           {impactedProducts.length === 0 ? (
