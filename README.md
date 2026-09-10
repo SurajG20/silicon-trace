@@ -5,7 +5,7 @@
 Pick any fab in the world, take it offline, and see which finished products die,
 how much revenue is at risk, and where to dual-source before it happens.
 
-🔗 **Live demo**: https://wexa-ai-drab.vercel.app
+🔗 **Live demo**: https://silicon-trace.vercel.app
 
 | Dashboard | Impact simulator | BOM explorer |
 | --- | --- | --- |
