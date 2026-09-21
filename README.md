@@ -7,6 +7,30 @@ how much revenue is at risk, and where to dual-source before it happens.
 
 🔗 **Live demo**: https://silicon-trace.vercel.app
 
+## Problem
+
+Semiconductor supply chains are opaque: a single fab outage can silently strand finished goods. Planners need to see **blast radius** (which products die), **revenue at risk**, and **dual-source options** — not static spreadsheets.
+
+## Approach
+
+1. Model the supply chain as a **graph** (BOM hierarchy, suppliers, facilities, regions).
+2. Run **parameterized Cypher** traversals for outage simulation, mitigation, and single points of failure.
+3. Present ranked, business-facing views (dashboard, impact simulator, BOM explorer) with **shareable deep links** and CSV export.
+
+## Decisions
+
+| Decision | Why |
+|----------|-----|
+| Graph DB (CognoDB / Neo4j) | BOM questions are recursive traversals; SQL CTEs are harder to evolve. |
+| Deterministic seed | Repeatable demos and tests (`MERGE` + constraints). |
+| Deep URLs for simulations | Recruiters and PMs can share `/impact?facility=…` without re-clicking. |
+
+## Results
+
+- **515** nodes · **999** relationships · **30** products across a multi-region dataset.
+- One-click worst-case facility suggestion for first-time visitors.
+- CSV exports for blast radius and single-points-of-failure reports.
+
 | Dashboard | Impact simulator | BOM explorer |
 | --- | --- | --- |
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Impact](docs/screenshots/impact.png) | ![BOM](docs/screenshots/bom.png) |

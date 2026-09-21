@@ -21,7 +21,9 @@ export function getDriver(): Promise<Driver> {
     const instance = neo4j.driver(config.COGNODB_URI, neo4j.auth.basic(config.COGNODB_USER, config.COGNODB_PASSWORD), {
       // The free-tier c0 instance allows 200 connections; stay well under it.
       maxConnectionPoolSize: 25,
-      connectionAcquisitionTimeout: 10_000,
+      // Paused free-tier instances need time to wake: wait out the wake-up
+      // instead of failing fast on the first cold query.
+      connectionAcquisitionTimeout: 30_000,
       // Plain JS numbers are far easier to serialise to JSON; every value in
       // this domain fits comfortably inside double-precision range.
       disableLosslessIntegers: true,
@@ -54,15 +56,19 @@ export async function executeWrite<T>(work: (tx: ManagedTransaction) => Promise<
 }
 
 async function run<T>(mode: "READ" | "WRITE", work: (tx: ManagedTransaction) => Promise<T>): Promise<T> {
-  try {
-    return await attempt(mode, work);
-  } catch (error) {
-    if (!isRetryable(error)) throw error;
-    // Free-tier instances pause when idle: the first query wakes them and
-    // times out, so one delayed retry covers the wake-up window instead of
-    // surfacing a scary error page for a healthy-but-sleepy database.
-    await sleep(RETRY_DELAY_MS);
-    return attempt(mode, work);
+  // Free-tier instances pause when idle and wake slowly: the first query can
+  // fail fast (refused) or stall (timeout), so back off and retry instead of
+  // surfacing a scary error page for a healthy-but-sleepy database.
+  // Total budget ≈ 30s acquisition + 5s + 30s + 10s + 30s — inside the
+  // serverless function limit while covering a typical wake-up window.
+  // Attempts: immediate, +5s, +15s → 3 total before surfacing the error.
+  for (let i = 0; ; i++) {
+    try {
+      return await attempt(mode, work);
+    } catch (error) {
+      if (!isRetryable(error) || i >= RETRY_DELAYS_MS.length) throw error;
+      await sleep(RETRY_DELAYS_MS[i]);
+    }
   }
 }
 
@@ -76,7 +82,7 @@ async function attempt<T>(mode: "READ" | "WRITE", work: (tx: ManagedTransaction)
   }
 }
 
-const RETRY_DELAY_MS = 3000;
+const RETRY_DELAYS_MS = [5_000, 10_000];
 
 const RETRYABLE_CODES = ["ServiceUnavailable", "SessionExpired", "TransientError", "DatabaseUnavailable"];
 
